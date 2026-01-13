@@ -1,0 +1,8 @@
+{
+  "name": "Urban Aesthetic Hunter",
+  "description": "A retro-futurist urban exploration app featuring Liquid Glass aesthetics, AR ghosting, and AI-powered image editing.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
