@@ -85,6 +85,7 @@ export const GhostLens: React.FC = () => {
   const [islandStatus, setIslandStatus] = useState<'idle' | 'scanning' | 'processing' | 'success'>('idle');
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
   
   // Selection / Drawing State
   const [isDrawing, setIsDrawing] = useState(false);
@@ -106,6 +107,14 @@ export const GhostLens: React.FC = () => {
     else if (preyList.length > 0 && islandStatus !== 'idle') setIslandStatus('success');
     else setIslandStatus('idle');
   }, [isProcessing, preyList.length]);
+
+  // Feedback Auto-Dismiss
+  useEffect(() => {
+    if (feedback) {
+        const timer = setTimeout(() => setFeedback(null), 3000);
+        return () => clearTimeout(timer);
+    }
+  }, [feedback]);
 
   // Lifecycle
   useEffect(() => {
@@ -287,12 +296,26 @@ export const GhostLens: React.FC = () => {
       const originalDataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
       const { data, mimeType } = stripDataPrefix(originalDataUrl);
-      const huntPrompt = "Extract the main central subject (sticker/object) from this image. Ignore frames/borders. Return ONLY the subject on a pure BLACK background.";
+      // Improved prompt for better recognition and extraction
+      const huntPrompt = "Cut out the single main subject from this image and place it on a pure black background. Ensure the background is #000000.";
       
       const resultBase64 = await editImageWithGemini(data, mimeType, huntPrompt);
 
       // Check cancellation again
       if (processingIdRef.current !== currentId) return;
+
+      // Calculate coordinates regardless of success/fail so we can place the result (or fallback)
+      let initX = 0;
+      let initY = 0;
+      
+      if (cropRect && containerRef.current) {
+          const screenW = containerRef.current.clientWidth;
+          const screenH = containerRef.current.clientHeight;
+          const rectCenterX = cropRect.x + cropRect.width / 2;
+          const rectCenterY = cropRect.y + cropRect.height / 2;
+          initX = rectCenterX - screenW / 2;
+          initY = rectCenterY - screenH / 2;
+      }
 
       if (resultBase64 && isMounted.current) {
         let processedImage = `data:image/jpeg;base64,${resultBase64}`;
@@ -300,29 +323,45 @@ export const GhostLens: React.FC = () => {
         
         // Final check
         if (processingIdRef.current !== currentId) return;
-
-        let initX = 0;
-        let initY = 0;
-        
-        if (cropRect && containerRef.current) {
-            const screenW = containerRef.current.clientWidth;
-            const screenH = containerRef.current.clientHeight;
-            const rectCenterX = cropRect.x + cropRect.width / 2;
-            const rectCenterY = cropRect.y + cropRect.height / 2;
-            initX = rectCenterX - screenW / 2;
-            initY = rectCenterY - screenH / 2;
-        }
-
         addSticker(processedImage, originalDataUrl, initX, initY);
+
       } else {
          console.warn("Hunt failed - no subject found");
-         setIslandStatus('idle');
+         if (processingIdRef.current === currentId) {
+            setFeedback("AI Scan Failed. Saving Original.");
+            // Fallback: Use original image
+            addSticker(originalDataUrl, originalDataUrl, initX, initY);
+         }
       }
 
     } catch (error) {
       console.error("Hunt process error:", error);
       if (processingIdRef.current === currentId) {
-          setIslandStatus('idle');
+          setFeedback("Connection Error. Saving Original.");
+          // Fallback: Use original image on error too (best effort)
+          // We need to re-calculate coords here or scope variables better, 
+          // but simplest is to reuse logic if possible, or just default to center (0,0) if variables unreachable.
+          // Since local variables sx/sy are scoped, we can't easily access them in catch without restructuring.
+          // However, we can at least try to save if we have the canvas context.
+          
+          // Re-attempt extraction of original data from canvas if available
+          const canvas = canvasRef.current;
+          if (canvas) {
+             const originalDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+             let fallbackX = 0, fallbackY = 0;
+             if (cropRect && containerRef.current) {
+                // Re-calc for fallback
+                 const screenW = containerRef.current.clientWidth;
+                 const screenH = containerRef.current.clientHeight;
+                 const rectCenterX = cropRect.x + cropRect.width / 2;
+                 const rectCenterY = cropRect.y + cropRect.height / 2;
+                 fallbackX = rectCenterX - screenW / 2;
+                 fallbackY = rectCenterY - screenH / 2;
+             }
+             addSticker(originalDataUrl, originalDataUrl, fallbackX, fallbackY);
+          } else {
+             setIslandStatus('idle');
+          }
       }
     } finally {
       if (isMounted.current && processingIdRef.current === currentId) {
@@ -469,6 +508,21 @@ export const GhostLens: React.FC = () => {
         onPointerCancel={handlePointerUp}
     >
        <DynamicIsland status={islandStatus} />
+
+       {/* Feedback Toast */}
+       <AnimatePresence>
+            {feedback && (
+                <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.9 }} 
+                    animate={{ opacity: 1, y: 0, scale: 1 }} 
+                    exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                    className="absolute bottom-36 left-1/2 -translate-x-1/2 z-50 bg-neutral-800/90 backdrop-blur-md border border-white/10 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3"
+                >
+                    <AlertTriangle size={18} className="text-amber-400" />
+                    <span className="text-sm font-medium">{feedback}</span>
+                </motion.div>
+            )}
+       </AnimatePresence>
 
        <input 
           type="file" 
