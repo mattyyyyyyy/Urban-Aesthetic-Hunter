@@ -18,6 +18,11 @@ export interface Post {
   title: string;
   image: string;
   likes: number;
+  user: {
+    name: string;
+    avatar: string;
+  };
+  heightClass: string; // Tailwind class for aspect ratio
 }
 
 export type AspectRatio = "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
