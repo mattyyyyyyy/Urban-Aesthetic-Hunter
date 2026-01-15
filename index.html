@@ -5,18 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Urban Aesthetic Hunter</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --color-bg: #f2f2f7; /* iOS System Gray 6 */
+        --color-text-primary: #000000;
+        --color-text-secondary: #8e8e93;
+      }
       body {
-        font-family: 'Inter', sans-serif;
-        background-color: #0f172a; /* Slate 900 */
-        color: #e4e4e7; /* Zinc 200 */
-        overflow: hidden; /* App-like feel */
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: var(--color-bg);
+        color: var(--color-text-primary);
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
       }
       .font-mono-retro {
         font-family: 'JetBrains Mono', monospace;
       }
-      /* Hide scrollbar for clean aesthetic */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }
@@ -24,14 +29,28 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
-      .liquid-glass {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-      }
       .custom-scrollbar::-webkit-scrollbar { width: 0px; }
+      
+      /* Apple-style Frosted Glass (Liquid Glass 2.0) */
+      .ios-glass {
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+      }
+      
+      .ios-card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        border: 1px solid rgba(0, 0, 0, 0.03);
+      }
+
+      /* Subtle gradient highlight for the "Liquid" feel without being messy */
+      .liquid-gradient {
+        background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 100%);
+      }
     </style>
   <script type="importmap">
 {
@@ -52,6 +71,5 @@
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

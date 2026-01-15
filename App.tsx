@@ -27,8 +27,11 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full h-[100dvh] bg-slate-900 text-gray-100 overflow-hidden font-sans">
+    <div className="relative w-full h-[100dvh] bg-zinc-200 text-zinc-900 overflow-hidden font-sans">
       
+      {/* Background Texture */}
+      <div className="absolute inset-0 bg-grid-pattern pointer-events-none z-0"></div>
+
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<Navigate to={`/${AppRoute.HOME}`} replace />} />
@@ -53,7 +56,7 @@ const AppContent: React.FC = () => {
           
           <Route path={`/${AppRoute.MUSEUM}`} element={
             <PageWrapper>
-              <div className="h-full w-full flex items-center justify-center font-mono text-xs text-gray-500">
+              <div className="h-full w-full flex items-center justify-center font-mono text-xs text-zinc-500">
                 MUSEUM_UNDER_CONSTRUCTION
               </div>
             </PageWrapper>
@@ -77,7 +80,7 @@ const PageWrapper: React.FC<{children: React.ReactNode}> = ({ children }) => (
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
     transition={{ duration: 0.2 }}
-    className="w-full h-full"
+    className="w-full h-full relative z-10"
   >
     {children}
   </motion.div>

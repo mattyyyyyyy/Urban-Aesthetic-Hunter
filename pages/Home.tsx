@@ -1,229 +1,365 @@
-import React from 'react';
-import { Search, User, ChevronRight, Layers, Sparkles, Box } from 'lucide-react';
-import { motion } from 'framer-motion';
+import React, { useState, useMemo } from 'react';
+import { Search, ChevronRight, Layers, LayoutGrid, List, ArrowLeft, X, MapPin } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { AppRoute } from '../types';
 
 // 城市海报数据 (City Posters)
 const CITY_POSTERS = [
   {
     id: 1,
-    issue: 'VOL.01',
-    title: '霓虹东京',
-    enTitle: 'TOKYO CYBERPUNK',
-    subtitle: '寻找新宿的灵魂碎片',
-    image: 'https://images.unsplash.com/photo-1542051841-866158684856?q=80&w=800&auto=format&fit=crop',
-    tag: '热门城市'
+    issue: 'NO.01',
+    title: '东京',
+    enTitle: 'TOKYO',
+    subtitle: '新宿灵魂碎片',
+    image: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/unnamed.jpg?raw=true',
+    tag: 'HOT',
+    color: 'bg-red-500',
   },
   {
     id: 2,
-    issue: 'VOL.02',
-    title: '赛博重庆',
-    enTitle: 'CYBER MOUNTAIN',
-    subtitle: '穿梭于8D魔幻现实',
-    image: 'https://images.unsplash.com/photo-1464869032613-1908608794b4?q=80&w=800&auto=format&fit=crop',
-    tag: '新发布'
+    issue: 'NO.02',
+    title: '重庆',
+    enTitle: 'CHONGQING',
+    subtitle: '8D魔幻现实',
+    image: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/unnamed%20(1).jpg?raw=true',
+    tag: 'NEW',
+    color: 'bg-blue-600',
   },
   {
     id: 3,
-    issue: 'VOL.03',
-    title: '雨夜香港',
-    enTitle: 'NEON RAIN',
-    subtitle: '九龙城寨的数字回响',
+    issue: 'NO.03',
+    title: '香港',
+    enTitle: 'HONGKONG',
+    subtitle: '九龙城寨回响',
     image: 'https://images.unsplash.com/photo-1506318137071-a8bcbf6755dd?q=80&w=800&auto=format&fit=crop',
-    tag: '限时活动'
+    tag: 'LTD',
+    color: 'bg-yellow-400',
   }
 ];
 
-// 贴纸库数据 (Sticker Library)
-const STICKER_LIBRARY = [
+// 路线攻略数据
+const TOKYO_ITINERARY = [
+    { id: 'p1', name: '浅草寺雷门', x: 20, y: 62, type: 'start' },
+    { id: 'p2', name: '东京塔', x: 45, y: 52, type: 'waypoint' },
+    { id: 'p3', name: '六本木', x: 35, y: 38, type: 'waypoint' },
+    { id: 'p4', name: '涉谷', x: 65, y: 28, type: 'waypoint' },
+    { id: 'p5', name: '新宿', x: 80, y: 15, type: 'end' }
+];
+
+const STICKER_ITEMS = [
   {
     id: 's1',
-    name: '赛博义体组件',
-    desc: '机械臂 / 电子眼 / 神经接口',
-    count: 12,
-    collected: 8,
-    preview1: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&fit=crop',
-    preview2: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=200&fit=crop',
+    name: '故障路标',
+    location: '上海',
+    date: '23.10.24',
+    image: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/111111.jpg?raw=true',
+    fullImage: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/111111.jpg?raw=true',
   },
   {
     id: 's2',
-    name: '故障艺术字体',
-    desc: '破碎 / 重叠 / 信号失真',
-    count: 24,
-    collected: 2,
-    preview1: 'https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=200&fit=crop',
-    preview2: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=200&fit=crop',
+    name: '拉面碗',
+    location: '东京',
+    date: '23.11.02',
+    image: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/1111231231411.jpg?raw=true',
+    fullImage: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/1111231231411.jpg?raw=true',
   },
   {
     id: 's3',
-    name: '工业废墟纹理',
-    desc: '混凝土 / 锈迹 / 警告标识',
-    count: 18,
-    collected: 18,
-    preview1: 'https://images.unsplash.com/photo-1518558997970-4ddc236affcd?q=80&w=200&fit=crop',
-    preview2: 'https://images.unsplash.com/photo-1504333638930-c8787321eee0?q=80&w=200&fit=crop',
+    name: '机械臂',
+    location: '重庆',
+    date: '23.12.15',
+    image: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/222222.jpg?raw=true',
+    fullImage: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/222222.jpg?raw=true',
+  },
+  {
+    id: 's4',
+    name: '复古电视',
+    location: '香港',
+    date: '24.01.05',
+    image: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/33333.jpg?raw=true',
+    fullImage: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/33333.jpg?raw=true',
+  },
+  {
+    id: 's5',
+    name: '霓虹梦',
+    location: '台北',
+    date: '24.02.14',
+    image: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/image.png?raw=true',
+    fullImage: 'https://github.com/mattyyyyyyy/picture2bed/blob/main/citypictture/image.png?raw=true',
   }
 ];
 
 export const Home: React.FC = () => {
   const navigate = useNavigate();
+  const [selectedSticker, setSelectedSticker] = useState<typeof STICKER_ITEMS[0] | null>(null);
+  const [activeCityId, setActiveCityId] = useState<number | null>(null);
+  const [isGridView, setIsGridView] = useState(true);
+
+  // Find active city data
+  const activeCity = CITY_POSTERS.find(c => c.id === activeCityId);
+
+  // Generate SVG path for the itinerary route
+  const routePath = useMemo(() => {
+    if (!TOKYO_ITINERARY.length) return "";
+    return TOKYO_ITINERARY.reduce((acc, point, index) => {
+        const cmd = index === 0 ? 'M' : 'L';
+        return `${acc} ${cmd} ${point.x} ${point.y}`;
+    }, "");
+  }, []);
 
   return (
-    <div className="w-full h-full bg-slate-900 flex flex-col text-white overflow-hidden font-sans">
+    <div className="w-full h-full bg-[#F2F2F7] flex flex-col text-black overflow-hidden font-sans relative">
       
-      {/* 顶部导航栏 */}
-      <header className="flex-none px-6 pt-14 pb-4 flex justify-between items-center z-10 bg-gradient-to-b from-slate-900 to-slate-900/0">
-         <div className="flex items-center gap-2">
-            <div className="bg-white/10 p-2 rounded-xl backdrop-blur-md border border-white/5 shadow-lg">
-                <Box size={20} className="text-amber-400" />
-            </div>
-            <div className="flex flex-col">
-                <span className="font-bold text-lg leading-none tracking-tight">Pi Next</span>
-                <span className="text-[10px] text-gray-400 font-mono tracking-wider">URBAN HUNTER</span>
-            </div>
-         </div>
-         <div className="flex gap-3">
-             <button className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full border border-white/5 active:scale-95 transition-all">
-                <Search size={20} className="text-white/80" />
-             </button>
-             <button className="w-10 h-10 flex items-center justify-center bg-white/5 rounded-full border border-white/5 active:scale-95 transition-all">
-                <User size={20} className="text-white/80" />
-             </button>
-         </div>
-      </header>
+      {/* 顶部安全区 (无标题栏) */}
+      <div className="w-full h-12 bg-[#F2F2F7]/90 backdrop-blur-md sticky top-0 z-30" />
 
       {/* 主要内容滚动区 */}
       <div className="flex-1 overflow-y-auto custom-scrollbar pb-24">
         
-        {/* 区域 1: 城市海报 (横向滑动) */}
-        <div className="mb-8">
-            <div className="px-6 mb-4 flex justify-between items-end">
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                    城市海报 
-                    <span className="text-amber-400 text-xs font-mono px-1.5 py-0.5 bg-amber-400/10 rounded">LIVE</span>
-                </h2>
-                <button className="text-xs text-gray-400 font-medium flex items-center hover:text-white transition-colors">
-                    全部城市 <ChevronRight size={12} />
+        {/* 区域 1: 城市海报 (Carousel) */}
+        <div className="pb-6">
+            <div className="px-4 mb-3 flex justify-between items-center">
+                <h2 className="text-lg font-bold text-gray-900">精选城市</h2>
+                <button className="text-xs font-medium text-gray-500 flex items-center gap-0.5">
+                    全部 <ChevronRight size={14} />
                 </button>
             </div>
 
             {/* 横向滚动容器 */}
-            <div className="flex overflow-x-auto snap-x snap-mandatory px-6 gap-4 no-scrollbar pb-4">
+            <div className="flex overflow-x-auto snap-x snap-mandatory px-4 gap-3 no-scrollbar">
                 {CITY_POSTERS.map((item) => (
                     <motion.div 
                         key={item.id}
                         whileTap={{ scale: 0.98 }}
-                        className="snap-center shrink-0 w-[85vw] h-[50vh] relative rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 group bg-slate-800"
+                        onClick={() => setActiveCityId(item.id)}
+                        className="snap-center shrink-0 w-[85vw] md:w-[400px] aspect-[16/10] relative rounded-[16px] overflow-hidden shadow-sm cursor-pointer bg-white"
                     >
-                        <img src={item.image} className="w-full h-full object-cover opacity-90 transition-transform duration-700 group-hover:scale-105" alt={item.title} />
+                        {/* Image - Full Color, Fill Container */}
+                        <img 
+                            src={item.image} 
+                            className="w-full h-full object-cover"
+                            alt={item.title} 
+                        />
                         
-                        {/* 渐变遮罩 */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
-                        
-                        {/* 左上角标签 */}
-                        <div className="absolute top-5 left-5 flex items-center gap-2">
-                            <div className="px-2 py-1 bg-black/30 backdrop-blur-md rounded-lg text-[10px] font-mono font-bold tracking-wider border border-white/10 text-white/90">
-                                {item.issue}
-                            </div>
-                            {item.tag && (
-                                <div className="px-2 py-1 bg-amber-500/90 backdrop-blur-md rounded-lg text-[10px] font-bold text-black border border-amber-400">
-                                    {item.tag}
-                                </div>
-                            )}
-                        </div>
+                        {/* Gradient Overlay for Text Readability */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
 
-                        {/* 底部信息 */}
-                        <div className="absolute bottom-0 left-0 right-0 p-6 pb-8">
-                            <h3 className="text-3xl font-black leading-none mb-1 text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-400">
-                                {item.title}
-                            </h3>
-                            <div className="text-xs font-mono text-amber-400 mb-2 tracking-widest uppercase opacity-80">
+                        {/* Top Badge */}
+                        <div className="absolute top-3 left-3">
+                            <div className="ios-glass px-2.5 py-0.5 text-[10px] font-bold font-mono rounded-full text-black backdrop-blur-xl">
                                 {item.enTitle}
                             </div>
-                            <p className="text-gray-300 text-sm font-light tracking-wide flex items-center gap-2 border-l-2 border-amber-500 pl-3">
-                                {item.subtitle}
-                            </p>
+                        </div>
+
+                        {/* Bottom Info */}
+                        <div className="absolute bottom-4 left-4 right-4 text-white">
+                            <h3 className="text-xl font-bold mb-0.5">{item.title}</h3>
+                            <p className="text-xs font-medium opacity-90">{item.subtitle}</p>
                         </div>
                     </motion.div>
                 ))}
             </div>
         </div>
 
-        {/* 区域 2: 贴纸库 (垂直列表) */}
-        <div className="px-6">
-            <div className="mb-4 flex justify-between items-end">
-                <div>
-                    <h2 className="text-xl font-bold mb-1">贴纸库</h2>
-                    <p className="text-xs text-gray-400">已收集 3 套 • 发现 12 个新素材</p>
-                </div>
-                <button className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center active:scale-90">
-                    <Layers size={16} className="text-white/80" />
-                </button>
-            </div>
-
-            <div className="flex flex-col gap-4">
-                {STICKER_LIBRARY.map((collection, idx) => (
-                    <motion.div 
-                        key={collection.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.1 }}
-                        className="bg-slate-800/40 border border-white/5 rounded-3xl p-4 flex gap-4 backdrop-blur-sm active:bg-slate-800 transition-colors cursor-pointer"
-                        onClick={() => navigate(`/${AppRoute.CAMERA}`)}
+        {/* 区域 2: 贴纸库 (Stickers) */}
+        <div className="px-4">
+            <div className="mb-3 flex justify-between items-center">
+                <h2 className="text-lg font-bold text-gray-900">我的收集</h2>
+                {/* View Toggle */}
+                <div className="flex bg-gray-200/80 p-0.5 rounded-lg h-7">
+                    <button 
+                        onClick={() => setIsGridView(true)}
+                        className={`px-2.5 rounded-[5px] flex items-center justify-center transition-all ${isGridView ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}
                     >
-                        {/* 预览图片堆叠 */}
-                        <div className="relative w-20 h-24 flex-shrink-0 ml-1">
-                            <div className="absolute top-0 right-[-4px] w-16 h-20 bg-slate-700 rounded-xl rotate-12 overflow-hidden border border-white/10 shadow-lg z-0 opacity-40">
-                                <img src={collection.preview2} className="w-full h-full object-cover" alt="" />
-                            </div>
-                            <div className="absolute top-1 right-[-2px] w-16 h-20 bg-slate-600 rounded-xl rotate-6 overflow-hidden border border-white/10 shadow-lg z-10 opacity-70">
-                                <img src={collection.preview2} className="w-full h-full object-cover" alt="" />
-                            </div>
-                            <div className="absolute top-2 left-0 w-16 h-20 bg-slate-500 rounded-xl -rotate-2 overflow-hidden border border-white/10 shadow-xl z-20">
-                                <img src={collection.preview1} className="w-full h-full object-cover" alt="" />
+                        <LayoutGrid size={14} />
+                    </button>
+                    <button 
+                        onClick={() => setIsGridView(false)}
+                        className={`px-2.5 rounded-[5px] flex items-center justify-center transition-all ${!isGridView ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}
+                    >
+                        <List size={14} />
+                    </button>
+                </div>
+            </div>
+
+            {/* Content Container */}
+            <div className={isGridView ? "grid grid-cols-2 gap-2 pb-8" : "flex flex-col gap-2 pb-8"}>
+                {STICKER_ITEMS.map((item, idx) => (
+                    <motion.div 
+                        key={item.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        className={`
+                            bg-white cursor-pointer group relative overflow-hidden transition-all duration-200
+                            ${isGridView 
+                                ? 'rounded-xl shadow-sm aspect-square border-none' 
+                                : 'rounded-xl shadow-sm border border-gray-100 flex flex-row items-center p-2 gap-3 h-20'
+                            }
+                        `}
+                        onClick={() => setSelectedSticker(item)}
+                    >
+                        {/* Image Container */}
+                        <div className={`
+                            relative bg-gray-100 overflow-hidden shrink-0
+                            ${isGridView 
+                                ? 'absolute inset-0 w-full h-full' // Grid: Fill entire card
+                                : 'w-16 h-16 rounded-lg' // List: Fixed thumbnail
+                            }
+                        `}>
+                             <img 
+                                src={item.image} 
+                                className="w-full h-full object-cover" 
+                                alt={item.name} 
+                            />
+                        </div>
+
+                        {/* Text Container - Overlay for Grid, Side for List */}
+                        <div className={`
+                            ${isGridView 
+                                ? 'absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end h-1/2'
+                                : 'flex flex-col justify-center min-w-0 flex-1'
+                            }
+                        `}>
+                            <h3 className={`font-bold text-sm truncate leading-tight mb-0.5 ${isGridView ? 'text-white' : 'text-gray-900'}`}>
+                                {item.name}
+                            </h3>
+                            <div className={`flex items-center gap-1 text-[10px] font-medium ${isGridView ? 'text-white/80' : 'text-gray-500'}`}>
+                                <MapPin size={10} />
+                                <span className="truncate">{item.location}</span>
                             </div>
                         </div>
 
-                        {/* 信息内容 */}
-                        <div className="flex-1 flex flex-col justify-center py-1 pl-2">
-                            <div className="flex justify-between items-start">
-                                <h3 className="font-bold text-lg text-gray-100">{collection.name}</h3>
-                                {collection.collected === collection.count && (
-                                    <Sparkles size={14} className="text-amber-400" />
-                                )}
+                        {/* List View Arrow */}
+                        {!isGridView && (
+                            <div className="pr-1 text-gray-300">
+                                <ChevronRight size={16} />
                             </div>
-                            
-                            <p className="text-xs text-gray-500 mb-3 line-clamp-1">{collection.desc}</p>
-
-                            {/* 进度条 */}
-                            <div className="w-full">
-                                <div className="flex justify-between text-[10px] font-mono mb-1.5 text-gray-400">
-                                    <span>COLLECTION</span>
-                                    <span className={collection.collected === collection.count ? 'text-amber-400' : ''}>
-                                        {collection.collected} / {collection.count}
-                                    </span>
-                                </div>
-                                <div className="h-1.5 w-full bg-slate-700/50 rounded-full overflow-hidden">
-                                    <div 
-                                        className={`h-full rounded-full transition-all duration-500 ${collection.collected === collection.count ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-white/40'}`} 
-                                        style={{ width: `${(collection.collected / collection.count) * 100}%` }}
-                                    ></div>
-                                </div>
-                            </div>
-                        </div>
+                        )}
                     </motion.div>
                 ))}
             </div>
-
-            {/* 底部按钮 */}
-            <button className="w-full mt-6 py-4 rounded-3xl border border-dashed border-white/10 text-gray-500 flex items-center justify-center gap-2 hover:bg-white/5 hover:border-white/20 transition-all mb-8 text-sm group">
-                <span className="group-hover:text-gray-300">浏览更多贴纸包</span>
-                <ChevronRight size={14} />
-            </button>
         </div>
-
       </div>
+
+      {/* 贴纸详情 Modal */}
+      <AnimatePresence>
+        {selectedSticker && (
+            <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm"
+                onClick={() => setSelectedSticker(null)}
+            >
+                <motion.div 
+                    initial={{ scale: 0.95, y: 10 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.95, y: 10 }}
+                    className="w-full max-w-sm bg-white rounded-[24px] shadow-2xl overflow-hidden relative"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {/* Close Button */}
+                    <button 
+                        onClick={() => setSelectedSticker(null)}
+                        className="absolute top-4 right-4 z-50 w-8 h-8 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center transition-colors"
+                    >
+                        <X size={16} className="text-black" />
+                    </button>
+
+                    {/* Image Area */}
+                    <div className="w-full aspect-square bg-gray-50 flex items-center justify-center p-0 relative">
+                         <img 
+                            src={selectedSticker.fullImage} 
+                            className="w-full h-full object-cover z-10" 
+                            alt={selectedSticker.name} 
+                         />
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-6">
+                         <div className="flex items-start justify-between mb-4">
+                             <div>
+                                <h2 className="text-2xl font-bold text-gray-900 mb-1">{selectedSticker.name}</h2>
+                                <p className="text-sm text-gray-500 font-medium">{selectedSticker.location} • {selectedSticker.date}</p>
+                             </div>
+                             <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                                 <Layers size={20} />
+                             </div>
+                         </div>
+
+                         <button className="w-full py-3.5 bg-black text-white font-semibold text-sm rounded-xl active:scale-95 transition-transform flex items-center justify-center gap-2 shadow-lg">
+                            去创作
+                        </button>
+                    </div>
+                </motion.div>
+            </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 城市攻略全屏页面 */}
+      <AnimatePresence>
+        {activeCity && (
+            <motion.div
+                initial={{ opacity: 0, y: '100%' }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: '100%' }}
+                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                className="fixed inset-0 z-50 bg-white flex flex-col font-sans"
+            >
+                {/* Header */}
+                <div className="relative z-20 px-4 pt-14 pb-3 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between">
+                     <button 
+                        onClick={() => setActiveCityId(null)}
+                        className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200 transition-colors"
+                    >
+                        <ArrowLeft size={18} className="text-black" />
+                    </button>
+                    <span className="font-bold text-lg">{activeCity.title}</span>
+                    <div className="w-9"></div> {/* Spacer */}
+                </div>
+
+                {/* Map Content */}
+                <div className="flex-1 relative z-10 w-full overflow-hidden bg-gray-50">
+                    <img 
+                        src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=2000&auto=format&fit=crop" 
+                        className="w-full h-full object-cover grayscale opacity-10"
+                        alt="Map"
+                    />
+                    
+                    {/* SVG Route */}
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <path 
+                            d={routePath} 
+                            fill="none" 
+                            stroke="#3b82f6" 
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeDasharray="4 4"
+                        />
+                    </svg>
+
+                    {/* Waypoints */}
+                    {TOKYO_ITINERARY.map((point, index) => (
+                        <div
+                            key={point.id}
+                            className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer z-10"
+                            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                        >
+                            <div className="mb-2 px-2.5 py-1 bg-white rounded-lg shadow-md border border-gray-100 transform transition-transform hover:-translate-y-1">
+                                <span className="text-xs font-bold text-gray-800 whitespace-nowrap">
+                                    {point.name}
+                                </span>
+                            </div>
+                            <div className={`w-3 h-3 rounded-full border-2 border-white shadow-sm ${point.type === 'start' ? 'bg-blue-500' : 'bg-gray-400'}`}></div>
+                        </div>
+                    ))}
+                </div>
+            </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };
