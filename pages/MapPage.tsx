@@ -3,17 +3,15 @@ import { User, Navigation, MapPin, Layers, Locate, Plus, Minus, Compass } from '
 
 export const MapPage: React.FC = () => {
   return (
-    <div className="relative w-full h-full bg-zinc-200 overflow-hidden font-sans">
+    <div className="relative w-full h-full bg-zinc-100 overflow-hidden font-sans">
       
-      {/* Map Background (Light Mode) */}
+      {/* Map Background (Full Color Digital Style) */}
       <div className="absolute inset-0 z-0">
-          {/* Using a high-quality light map texture */}
           <img 
-            src="https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2400&auto=format&fit=crop" 
-            className="w-full h-full object-cover grayscale opacity-30 contrast-125" 
+            src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=2000&auto=format&fit=crop" 
+            className="w-full h-full object-cover" 
             alt="Map Background"
           />
-          <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none" />
       </div>
 
       {/* Map Markers (Bauhaus Style) */}

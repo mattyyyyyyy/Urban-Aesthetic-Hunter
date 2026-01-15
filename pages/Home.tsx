@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, ChevronRight, Layers, LayoutGrid, List, ArrowLeft, X, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { AppRoute } from '../types';
 
 // 城市海报数据 (City Posters)
 const CITY_POSTERS = [
@@ -106,6 +107,14 @@ export const Home: React.FC = () => {
         return `${acc} ${cmd} ${point.x} ${point.y}`;
     }, "");
   }, []);
+
+  const handleCreate = () => {
+      if (selectedSticker) {
+          navigate(`/${AppRoute.CAMERA}`, { 
+              state: { initialSticker: selectedSticker.fullImage } 
+          });
+      }
+  };
 
   return (
     <div className="w-full h-full bg-[#F2F2F7] flex flex-col text-black overflow-hidden font-sans relative">
@@ -288,7 +297,10 @@ export const Home: React.FC = () => {
                              </div>
                          </div>
 
-                         <button className="w-full py-3.5 bg-black text-white font-semibold text-sm rounded-xl active:scale-95 transition-transform flex items-center justify-center gap-2 shadow-lg">
+                         <button 
+                            onClick={handleCreate}
+                            className="w-full py-3.5 bg-black text-white font-semibold text-sm rounded-xl active:scale-95 transition-transform flex items-center justify-center gap-2 shadow-lg"
+                         >
                             去创作
                         </button>
                     </div>
@@ -297,7 +309,7 @@ export const Home: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* 城市攻略全屏页面 */}
+      {/* 城市攻略详情页 (Scrollable Page) */}
       <AnimatePresence>
         {activeCity && (
             <motion.div
@@ -307,54 +319,93 @@ export const Home: React.FC = () => {
                 transition={{ type: "spring", damping: 25, stiffness: 200 }}
                 className="fixed inset-0 z-50 bg-white flex flex-col font-sans"
             >
-                {/* Header */}
-                <div className="relative z-20 px-4 pt-14 pb-3 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between">
+                {/* Header (Sticky) */}
+                <div className="sticky top-0 z-30 px-4 pt-14 pb-3 bg-white/90 backdrop-blur-md border-b border-gray-100 flex items-center justify-between">
                      <button 
                         onClick={() => setActiveCityId(null)}
                         className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200 transition-colors"
                     >
                         <ArrowLeft size={18} className="text-black" />
                     </button>
-                    <span className="font-bold text-lg">{activeCity.title}</span>
+                    <span className="font-bold text-sm text-gray-500 tracking-wider">{activeCity.enTitle}</span>
                     <div className="w-9"></div> {/* Spacer */}
                 </div>
 
-                {/* Map Content */}
-                <div className="flex-1 relative z-10 w-full overflow-hidden bg-gray-50">
-                    <img 
-                        src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=2000&auto=format&fit=crop" 
-                        className="w-full h-full object-cover grayscale opacity-10"
-                        alt="Map"
-                    />
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto bg-white pb-10">
                     
-                    {/* SVG Route */}
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" viewBox="0 0 100 100" preserveAspectRatio="none">
-                        <path 
-                            d={routePath} 
-                            fill="none" 
-                            stroke="#3b82f6" 
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeDasharray="4 4"
-                        />
-                    </svg>
-
-                    {/* Waypoints */}
-                    {TOKYO_ITINERARY.map((point, index) => (
-                        <div
-                            key={point.id}
-                            className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer z-10"
-                            style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                        >
-                            <div className="mb-2 px-2.5 py-1 bg-white rounded-lg shadow-md border border-gray-100 transform transition-transform hover:-translate-y-1">
-                                <span className="text-xs font-bold text-gray-800 whitespace-nowrap">
-                                    {point.name}
-                                </span>
-                            </div>
-                            <div className={`w-3 h-3 rounded-full border-2 border-white shadow-sm ${point.type === 'start' ? 'bg-blue-500' : 'bg-gray-400'}`}></div>
+                    {/* 1. 标题区 */}
+                    <div className="px-6 pt-8 pb-6">
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className="px-2 py-0.5 bg-black text-white text-[10px] font-bold rounded-full">{activeCity.tag}</span>
+                            <span className="text-xs font-mono text-gray-400">{activeCity.issue}</span>
                         </div>
-                    ))}
+                        <h1 className="text-4xl font-bold text-gray-900 mb-2 leading-tight">{activeCity.title}</h1>
+                        <p className="text-lg text-gray-500 font-medium">{activeCity.subtitle}</p>
+                    </div>
+
+                    {/* 2. 封面大图 */}
+                    <div className="w-full aspect-[4/3] px-6 mb-10">
+                        <div className="w-full h-full rounded-2xl overflow-hidden shadow-lg relative">
+                             <img 
+                                src={activeCity.image} 
+                                className="w-full h-full object-cover"
+                                alt="Cover"
+                            />
+                            {/* Decorative Line */}
+                            <div className="absolute bottom-4 left-4 w-12 h-1 bg-white/80 backdrop-blur-sm rounded-full"></div>
+                        </div>
+                    </div>
+
+                    {/* 3. 路线地图区 (Scroll down to see) */}
+                    <div className="px-6 mb-4">
+                        <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
+                            <MapPin size={20} className="text-blue-500" />
+                            城市探索路线
+                        </h3>
+                        <p className="text-xs text-gray-400 mt-1">下滑查看完整路线图</p>
+                    </div>
+
+                    <div className="w-full h-[60vh] relative bg-gray-50 border-t border-b border-gray-100">
+                        <img 
+                            src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=2000&auto=format&fit=crop" 
+                            className="w-full h-full object-cover grayscale opacity-15"
+                            alt="Map"
+                        />
+                        
+                        {/* SVG Route */}
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" viewBox="0 0 100 100" preserveAspectRatio="none">
+                            <path 
+                                d={routePath} 
+                                fill="none" 
+                                stroke="#3b82f6" 
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeDasharray="4 4"
+                            />
+                        </svg>
+
+                        {/* Waypoints */}
+                        {TOKYO_ITINERARY.map((point, index) => (
+                            <div
+                                key={point.id}
+                                className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer z-10"
+                                style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                            >
+                                <div className="mb-2 px-2.5 py-1 bg-white rounded-lg shadow-md border border-gray-100 transform transition-transform hover:-translate-y-1">
+                                    <span className="text-xs font-bold text-gray-800 whitespace-nowrap">
+                                        {point.name}
+                                    </span>
+                                </div>
+                                <div className={`w-3 h-3 rounded-full border-2 border-white shadow-sm ${point.type === 'start' ? 'bg-blue-500' : 'bg-gray-400'}`}></div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="p-6 text-center text-gray-300 text-xs">
+                        End of Itinerary
+                    </div>
                 </div>
             </motion.div>
         )}
