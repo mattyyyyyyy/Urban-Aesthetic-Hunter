@@ -455,14 +455,16 @@ export const GhostLens: React.FC = () => {
 
       if (processingIdRef.current !== currentId) return;
 
+      const visualSize = cropRect ? { w: cropRect.width, h: cropRect.height } : undefined;
+
       if (resultBase64) {
         let processedImage = `data:image/jpeg;base64,${resultBase64}`;
         processedImage = await removeBlackBackground(processedImage);
-        addSticker(processedImage, originalDataUrl, initX, initY);
+        addSticker(processedImage, originalDataUrl, initX, initY, visualSize);
       } else {
-         // Fallback logic - This is CRITICAL for "if not recognized, just use original"
-         setFeedback("已保留原图"); // "Kept original"
-         addSticker(originalDataUrl, originalDataUrl, initX, initY);
+         // Fallback logic
+         setFeedback("已保留原图"); 
+         addSticker(originalDataUrl, originalDataUrl, initX, initY, visualSize);
       }
 
     } catch (error) {
@@ -470,7 +472,8 @@ export const GhostLens: React.FC = () => {
         // Ultimate fallback
         if (processingIdRef.current === currentId && originalDataUrl) {
             setFeedback("已保留原图");
-            addSticker(originalDataUrl, originalDataUrl, initX, initY);
+            const visualSize = cropRect ? { w: cropRect.width, h: cropRect.height } : undefined;
+            addSticker(originalDataUrl, originalDataUrl, initX, initY, visualSize);
         }
     } finally {
       if (isMounted.current && processingIdRef.current === currentId) {
@@ -479,14 +482,24 @@ export const GhostLens: React.FC = () => {
     }
   };
 
-  const addSticker = (imageUrl: string, originalUrl: string = '', x: number = 0, y: number = 0) => {
+  const addSticker = (imageUrl: string, originalUrl: string = '', x: number = 0, y: number = 0, initialSize?: {w: number, h: number}) => {
+      // Calculate start scale to match the drawn box size
+      // The DraggableSticker has a max box of 200px.
+      // If the drawn box is 300px, scale should be 1.5.
+      // If drawn box is 100px, scale should be 0.5.
+      let startScale = 1;
+      if (initialSize) {
+          const maxDimension = Math.max(initialSize.w, initialSize.h);
+          startScale = maxDimension / 200; 
+      }
+
       const newPrey: Prey = {
           id: Date.now(),
           image: imageUrl,
           original: originalUrl,
           x: x, 
           y: y,
-          scale: 1,
+          scale: startScale,
           rotation: 0
         };
         setPreyList(prev => [...prev, newPrey]);
@@ -600,10 +613,10 @@ export const GhostLens: React.FC = () => {
            </div>
        )}
        
-       {/* Drawing Selection Layer (Hunting Mode Only) */}
+       {/* Drawing Selection Layer (Hunting Mode Only) - UPDATED STYLE: INVERTED */}
        {viewMode === 'hunting' && selectionRect && isDrawing && (
            <div 
-             className="absolute border border-yellow-400 bg-yellow-400/20 z-30 pointer-events-none"
+             className="absolute z-30 pointer-events-none backdrop-invert bg-white/10 border border-white/50 shadow-[0_0_15px_rgba(255,255,255,0.5)]"
              style={{
                  left: selectionRect.x,
                  top: selectionRect.y,
@@ -611,9 +624,11 @@ export const GhostLens: React.FC = () => {
                  height: selectionRect.height,
              }}
            >
-               <div className="absolute -top-6 left-0 text-yellow-400 text-[10px] font-bold tracking-wider bg-black/50 px-1">
-                   SCANNING...
-               </div>
+               {/* Corner accents */}
+               <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-white"></div>
+               <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-white"></div>
+               <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-white"></div>
+               <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-white"></div>
            </div>
        )}
 
@@ -793,28 +808,25 @@ const DraggableSticker: React.FC<{
     onDelete: () => void;
 }> = ({ data, containerRef, isSelected, onSelect, onUpdate, onDelete }) => {
     
-    const stickerRef = useRef<HTMLDivElement>(null);
-
-    // Linear interaction handler
+    // Improved linear interaction handler that relies on absolute state
     const handleInteraction = (e: React.PointerEvent, type: 'rotate' | 'scale') => {
         e.stopPropagation();
         e.preventDefault();
         
-        if (!stickerRef.current) return;
+        if (!containerRef.current) return;
         
-        // Get center of the sticker element visually
-        const rect = stickerRef.current.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
+        // Calculate the ABSOLUTE center of the sticker based on state + container
+        // data.x/y are offsets from the center of the container
+        const rect = containerRef.current.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2 + data.x;
+        const centerY = rect.top + rect.height / 2 + data.y;
         
         const startX = e.clientX;
         const startY = e.clientY;
         
-        // Initial values
         const startRotation = data.rotation;
         const startScale = data.scale;
         
-        // Initial pointer vector
         const startAngle = Math.atan2(startY - centerY, startX - centerX) * (180 / Math.PI);
         const startDist = Math.hypot(startX - centerX, startY - centerY);
 
@@ -830,7 +842,7 @@ const DraggableSticker: React.FC<{
                 const curDist = Math.hypot(curX - centerX, curY - centerY);
                 const scaleFactor = curDist / startDist;
                 // Limit min scale to avoid disappearing
-                onUpdate({ scale: Math.max(0.3, startScale * scaleFactor) });
+                onUpdate({ scale: Math.max(0.2, startScale * scaleFactor) });
             }
         };
 
@@ -845,7 +857,6 @@ const DraggableSticker: React.FC<{
 
     return (
         <motion.div
-            ref={stickerRef}
             drag
             dragMomentum={false}
             onPointerDown={(e) => {
@@ -874,6 +885,7 @@ const DraggableSticker: React.FC<{
                     src={data.image} 
                     alt="sticker"
                     className={`max-w-[200px] max-h-[200px] object-contain drop-shadow-2xl select-none pointer-events-none transition-all ${isSelected ? 'brightness-110' : ''}`}
+                    style={{ transformOrigin: 'center center' }}
                 />
 
                 {/* Selection Frame (Clean Bauhaus Style) */}
