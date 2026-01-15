@@ -100,7 +100,9 @@ export const GhostLens: React.FC = () => {
   // Feedback Auto-Dismiss
   useEffect(() => {
     if (feedback) {
-        const timer = setTimeout(() => setFeedback(null), 3000);
+        // Keep feedback longer if it's "Saving..."
+        const duration = feedback.includes("生成") ? 5000 : 3000;
+        const timer = setTimeout(() => setFeedback(null), duration);
         return () => clearTimeout(timer);
     }
   }, [feedback]);
@@ -238,12 +240,124 @@ export const GhostLens: React.FC = () => {
       startCamera(); 
   };
 
-  const savePoster = () => {
-      setFeedback("已保存至相册");
-      // In a real app, we would combine the layers onto a canvas and trigger a download
-      setTimeout(() => {
-         navigate(`/${AppRoute.HOME}`);
-      }, 1500);
+  const savePoster = async () => {
+      if (!containerRef.current || !capturedBackground) return;
+      
+      // Use isProcessing state to disable UI during save
+      setIsProcessing(true);
+      setFeedback("正在生成海报...");
+
+      try {
+          // 1. Setup Canvas
+          const canvas = document.createElement('canvas');
+          const rect = containerRef.current.getBoundingClientRect();
+          // Use 2x resolution for better quality
+          const scale = 2; 
+          canvas.width = rect.width * scale;
+          canvas.height = rect.height * scale;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error("Context creation failed");
+
+          // 2. Draw Background (Object-Cover Simulation)
+          const bgImg = new Image();
+          bgImg.crossOrigin = "anonymous";
+          await new Promise((resolve, reject) => {
+              bgImg.onload = resolve;
+              bgImg.onerror = reject;
+              bgImg.src = capturedBackground!;
+          });
+
+          // Draw bg to cover canvas
+          const bgRatio = bgImg.width / bgImg.height;
+          const canvasRatio = canvas.width / canvas.height;
+          let drawW, drawH, drawX, drawY;
+
+          if (canvasRatio > bgRatio) {
+              drawW = canvas.width;
+              drawH = canvas.width / bgRatio;
+              drawX = 0;
+              drawY = (canvas.height - drawH) / 2;
+          } else {
+              drawH = canvas.height;
+              drawW = canvas.height * bgRatio;
+              drawX = (canvas.width - drawW) / 2;
+              drawY = 0;
+          }
+          ctx.drawImage(bgImg, drawX, drawY, drawW, drawH);
+
+          // 3. Draw Stickers
+          for (const prey of preyList) {
+              const img = new Image();
+              img.crossOrigin = "anonymous";
+              await new Promise((resolve, reject) => {
+                  img.onload = resolve;
+                  img.onerror = () => resolve(null); // skip if fail
+                  img.src = prey.image;
+              });
+
+              ctx.save();
+              // Coordinate mapping: 
+              // prey.x/y are in CSS pixels relative to center.
+              // canvas is scaled by `scale`.
+              const centerX = canvas.width / 2;
+              const centerY = canvas.height / 2;
+              const x = centerX + (prey.x * scale);
+              const y = centerY + (prey.y * scale);
+
+              ctx.translate(x, y);
+              ctx.rotate(prey.rotation * Math.PI / 180);
+
+              // Size mapping:
+              // CSS max size is 200px.
+              // We need to calculate what the width/height is in CSS pixels, then multiply by `scale`.
+              const maxCssSize = 200;
+              const natW = img.width;
+              const natH = img.height;
+              let cssW = natW;
+              let cssH = natH;
+
+              // Apply max-width/max-height logic from CSS (simulate object-contain behavior within 200x200 box)
+              // Actually, <img className="max-w-[200px] max-h-[200px]" /> means the image scales down to fit.
+              if (cssW > maxCssSize || cssH > maxCssSize) {
+                  const ratio = Math.min(maxCssSize / cssW, maxCssSize / cssH);
+                  cssW *= ratio;
+                  cssH *= ratio;
+              }
+
+              // Apply user scale
+              cssW *= prey.scale;
+              cssH *= prey.scale;
+
+              // Convert to canvas pixels
+              const finalW = cssW * scale;
+              const finalH = cssH * scale;
+
+              ctx.drawImage(img, -finalW / 2, -finalH / 2, finalW, finalH);
+              ctx.restore();
+          }
+
+          // 4. Download
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+          const link = document.createElement('a');
+          link.download = `UrbanHunter_${Date.now()}.jpg`;
+          link.href = dataUrl;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          setFeedback("已保存至相册");
+          
+          // Wait a bit before leaving
+          setTimeout(() => {
+              navigate(`/${AppRoute.HOME}`);
+          }, 2000);
+
+      } catch (err) {
+          console.error("Save failed", err);
+          setFeedback("保存失败，请重试");
+      } finally {
+          setIsProcessing(false);
+      }
   };
 
   // --- AI Scan Logic (Existing) ---
@@ -266,6 +380,21 @@ export const GhostLens: React.FC = () => {
     
     setIsProcessing(true);
 
+    // Initial calculation of position to place the sticker exactly where drawn
+    let initX = 0;
+    let initY = 0;
+    if (cropRect && containerRef.current) {
+        const screenW = containerRef.current.clientWidth;
+        const screenH = containerRef.current.clientHeight;
+        const rectCenterX = cropRect.x + cropRect.width / 2;
+        const rectCenterY = cropRect.y + cropRect.height / 2;
+        // The sticker coordinates are offsets from center
+        initX = rectCenterX - screenW / 2;
+        initY = rectCenterY - screenH / 2;
+    }
+
+    let originalDataUrl = '';
+
     try {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -275,6 +404,7 @@ export const GhostLens: React.FC = () => {
       if (cropRect && containerRef.current) {
           const screenW = containerRef.current.clientWidth;
           const screenH = containerRef.current.clientHeight;
+          // Calculate video scaling relative to screen
           const scale = Math.max(screenW / sourceWidth, screenH / sourceHeight);
           const renderedW = sourceWidth * scale;
           const renderedH = sourceHeight * scale;
@@ -295,6 +425,7 @@ export const GhostLens: React.FC = () => {
           sx = 0; sy = 0; sWidth = sourceWidth; sHeight = sourceHeight;
       }
 
+      // Resize for processing if too large
       const MAX_SIZE = 800;
       let targetW = sWidth;
       let targetH = sHeight;
@@ -309,42 +440,38 @@ export const GhostLens: React.FC = () => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.drawImage(source, sx, sy, sWidth, sHeight, 0, 0, targetW, targetH);
-      const originalDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      originalDataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
-      const { data, mimeType } = stripDataPrefix(originalDataUrl);
-      const huntPrompt = "Cut out the main object in this image and put it on a black background.";
-      const resultBase64 = await editImageWithGemini(data, mimeType, huntPrompt);
+      // --- AI Processing with Fallback ---
+      let resultBase64: string | null = null;
+      try {
+        const { data, mimeType } = stripDataPrefix(originalDataUrl);
+        const huntPrompt = "Cut out the main object in this image and put it on a black background. If unsure, return the original image.";
+        resultBase64 = await editImageWithGemini(data, mimeType, huntPrompt);
+      } catch (err) {
+        console.warn("AI processing error, falling back:", err);
+        // Do not throw, just proceed with resultBase64 as null
+      }
 
       if (processingIdRef.current !== currentId) return;
 
-      let initX = 0;
-      let initY = 0;
-      if (cropRect && containerRef.current) {
-          const screenW = containerRef.current.clientWidth;
-          const screenH = containerRef.current.clientHeight;
-          const rectCenterX = cropRect.x + cropRect.width / 2;
-          const rectCenterY = cropRect.y + cropRect.height / 2;
-          initX = rectCenterX - screenW / 2;
-          initY = rectCenterY - screenH / 2;
-      }
-
-      if (resultBase64 && isMounted.current) {
+      if (resultBase64) {
         let processedImage = `data:image/jpeg;base64,${resultBase64}`;
         processedImage = await removeBlackBackground(processedImage);
-        if (processingIdRef.current === currentId) {
-            addSticker(processedImage, originalDataUrl, initX, initY);
-        }
+        addSticker(processedImage, originalDataUrl, initX, initY);
       } else {
-         if (processingIdRef.current === currentId) {
-            setFeedback("No object found, using original.");
-            addSticker(originalDataUrl, originalDataUrl, initX, initY);
-         }
+         // Fallback logic - This is CRITICAL for "if not recognized, just use original"
+         setFeedback("已保留原图"); // "Kept original"
+         addSticker(originalDataUrl, originalDataUrl, initX, initY);
       }
 
     } catch (error) {
-      if (processingIdRef.current === currentId) {
-          setFeedback("Scan failed, try again.");
-      }
+        console.error("General Scan Error", error);
+        // Ultimate fallback
+        if (processingIdRef.current === currentId && originalDataUrl) {
+            setFeedback("已保留原图");
+            addSticker(originalDataUrl, originalDataUrl, initX, initY);
+        }
     } finally {
       if (isMounted.current && processingIdRef.current === currentId) {
           setIsProcessing(false);
@@ -460,34 +587,16 @@ export const GhostLens: React.FC = () => {
           )}
        </div>
 
-       {/* Poster Graphic Overlay (Only Visible in Poster Mode) */}
+       {/* Poster Graphic Overlay (CLEANED - No Big Text) */}
        {viewMode === 'poster' && (
            <div className="absolute inset-0 z-10 pointer-events-none p-6 flex flex-col justify-between">
-               {/* Top Info */}
-               <div className="flex justify-between items-start opacity-80">
-                   <div className="font-mono text-xs text-white bg-black/50 px-2 py-1">
+               {/* Minimal Info - Just Date/Time in corner */}
+               <div className="flex justify-between items-start opacity-60">
+                   <div className="font-mono text-[10px] text-white bg-black/30 px-2 py-1 backdrop-blur-sm rounded-sm">
                        <p>{new Date().toLocaleDateString()}</p>
-                       <p>{new Date().toLocaleTimeString()}</p>
-                   </div>
-                   <div className="w-10 h-10 border border-white/50 rounded-full flex items-center justify-center">
-                       <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                    </div>
                </div>
-
-               {/* Geometric Decorations */}
-               <div className="absolute top-1/3 left-6 w-2 h-20 bg-yellow-400/80 mix-blend-overlay"></div>
-               <div className="absolute bottom-1/3 right-6 w-20 h-2 bg-blue-500/80 mix-blend-overlay"></div>
-
-               {/* Bottom Typography */}
-               <div className="mb-24">
-                   <h1 className="text-6xl font-black text-white leading-none tracking-tighter mix-blend-difference opacity-90">
-                       URBAN<br/>HUNTER
-                   </h1>
-                   <div className="flex items-center gap-2 mt-4">
-                       <div className="w-4 h-4 bg-white"></div>
-                       <p className="text-xs font-mono text-white tracking-widest">CITY_AESTHETICS_V1.0</p>
-                   </div>
-               </div>
+               {/* No Big Title Text here anymore */}
            </div>
        )}
        
@@ -554,7 +663,7 @@ export const GhostLens: React.FC = () => {
                             <ImageIcon size={24} className="text-white opacity-90" />
                         </button>
 
-                        {/* Bauhaus Shutter Button (Capture & Freeze) */}
+                        {/* Bauhaus Shutter Button (Capture & Freeze) - No Animation on Processing */}
                         <button 
                             onClick={() => takeSnapshot()}
                             disabled={isProcessing}
@@ -564,7 +673,7 @@ export const GhostLens: React.FC = () => {
                                 ${isProcessing ? 'opacity-80' : ''}
                             `}
                         >
-                             <div className={`w-12 h-12 bg-red-600 rounded-full border-2 border-zinc-900 transition-all duration-300 ${isProcessing ? 'scale-75' : ''}`}></div>
+                             <div className={`w-12 h-12 bg-red-600 rounded-full border-2 border-zinc-900 transition-all duration-300`}></div>
                         </button>
 
                         {/* Clear */}
@@ -590,7 +699,12 @@ export const GhostLens: React.FC = () => {
                         {/* Save / Confirm */}
                         <button 
                             onClick={savePoster}
-                            className="w-20 h-20 bg-yellow-400 border-2 border-zinc-900 rounded-[20px] flex items-center justify-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all"
+                            disabled={isProcessing}
+                            className={`
+                                w-20 h-20 bg-yellow-400 border-2 border-zinc-900 rounded-[20px] flex items-center justify-center 
+                                shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all
+                                ${isProcessing ? 'opacity-80' : ''}
+                            `}
                         >
                             <Check size={36} className="text-black" strokeWidth={3} />
                         </button>
@@ -679,13 +793,68 @@ const DraggableSticker: React.FC<{
     onDelete: () => void;
 }> = ({ data, containerRef, isSelected, onSelect, onUpdate, onDelete }) => {
     
+    const stickerRef = useRef<HTMLDivElement>(null);
+
+    // Linear interaction handler
+    const handleInteraction = (e: React.PointerEvent, type: 'rotate' | 'scale') => {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        if (!stickerRef.current) return;
+        
+        // Get center of the sticker element visually
+        const rect = stickerRef.current.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        
+        const startX = e.clientX;
+        const startY = e.clientY;
+        
+        // Initial values
+        const startRotation = data.rotation;
+        const startScale = data.scale;
+        
+        // Initial pointer vector
+        const startAngle = Math.atan2(startY - centerY, startX - centerX) * (180 / Math.PI);
+        const startDist = Math.hypot(startX - centerX, startY - centerY);
+
+        const onMove = (moveEvent: PointerEvent) => {
+            const curX = moveEvent.clientX;
+            const curY = moveEvent.clientY;
+            
+            if (type === 'rotate') {
+                const curAngle = Math.atan2(curY - centerY, curX - centerX) * (180 / Math.PI);
+                const delta = curAngle - startAngle;
+                onUpdate({ rotation: startRotation + delta });
+            } else {
+                const curDist = Math.hypot(curX - centerX, curY - centerY);
+                const scaleFactor = curDist / startDist;
+                // Limit min scale to avoid disappearing
+                onUpdate({ scale: Math.max(0.3, startScale * scaleFactor) });
+            }
+        };
+
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+    };
+
     return (
         <motion.div
+            ref={stickerRef}
             drag
             dragMomentum={false}
             onPointerDown={(e) => {
                 e.stopPropagation();
                 onSelect();
+            }}
+            onDragEnd={(e, info) => {
+                // Sync final drag position to state to avoid jumps on re-render
+                onUpdate({ x: data.x + info.offset.x, y: data.y + info.offset.y });
             }}
             style={{ 
                 x: data.x, 
@@ -707,14 +876,14 @@ const DraggableSticker: React.FC<{
                     className={`max-w-[200px] max-h-[200px] object-contain drop-shadow-2xl select-none pointer-events-none transition-all ${isSelected ? 'brightness-110' : ''}`}
                 />
 
-                {/* Selection Frame (Clean Bauhaus Style for Poster Mode) */}
+                {/* Selection Frame (Clean Bauhaus Style) */}
                 {isSelected && (
                     <>
                         <div className="absolute -inset-2 border-2 border-yellow-400 rounded-none pointer-events-none opacity-80"></div>
                          <div className="absolute -top-2 -left-2 w-2 h-2 bg-yellow-400 pointer-events-none"></div>
                          <div className="absolute -bottom-2 -right-2 w-2 h-2 bg-yellow-400 pointer-events-none"></div>
                         
-                        {/* Delete Button */}
+                        {/* Delete Button (Click to delete) */}
                         <div 
                             className="absolute -top-6 -right-6 w-8 h-8 bg-red-500 border border-black flex items-center justify-center text-white cursor-pointer shadow-lg active:scale-90 transition-transform pointer-events-auto"
                             onPointerDown={(e) => { e.stopPropagation(); onDelete(); }}
@@ -722,25 +891,18 @@ const DraggableSticker: React.FC<{
                             <X size={16} strokeWidth={2.5} />
                         </div>
 
-                        {/* Rotate/Scale Handle */}
+                        {/* Rotate Handle (Drag to rotate) */}
                         <div 
-                            className="absolute -bottom-6 -right-6 w-8 h-8 bg-yellow-400 border border-black flex items-center justify-center text-black cursor-pointer shadow-lg active:scale-90 transition-transform pointer-events-auto"
-                            onPointerDown={(e) => { 
-                                e.stopPropagation(); 
-                                onUpdate({ rotation: data.rotation + 45 });
-                            }}
+                            className="absolute -bottom-6 -right-6 w-8 h-8 bg-yellow-400 border border-black flex items-center justify-center text-black cursor-pointer shadow-lg active:scale-90 transition-transform pointer-events-auto touch-none"
+                            onPointerDown={(e) => handleInteraction(e, 'rotate')}
                         >
                             <RotateCw size={16} strokeWidth={2.5} />
                         </div>
 
-                        {/* Scale Button */}
+                        {/* Scale Handle (Drag to scale) */}
                          <div 
-                            className="absolute -bottom-6 -left-6 w-8 h-8 bg-white border border-black flex items-center justify-center text-black cursor-pointer shadow-lg active:scale-90 transition-transform pointer-events-auto"
-                            onPointerDown={(e) => { 
-                                e.stopPropagation(); 
-                                const newScale = data.scale >= 1.5 ? 0.5 : data.scale + 0.25;
-                                onUpdate({ scale: newScale });
-                            }}
+                            className="absolute -bottom-6 -left-6 w-8 h-8 bg-white border border-black flex items-center justify-center text-black cursor-pointer shadow-lg active:scale-90 transition-transform pointer-events-auto touch-none"
+                            onPointerDown={(e) => handleInteraction(e, 'scale')}
                         >
                             <Scale size={14} strokeWidth={2.5} />
                         </div>
